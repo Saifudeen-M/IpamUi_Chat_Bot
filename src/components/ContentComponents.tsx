@@ -1,145 +1,120 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { sendMessage } from "../services/api";
+import { useState } from "react";
+import { sendQuestion } from "../services/api";
 
-interface Message {
-  text: string;
-  sender: "user" | "bot";
-}
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 function ContentComponents() {
-  const [userMessage, setUserMessage] = useState<string>("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [question, setQuestion] = useState("");
+  const [history, setHistory] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const handleSendMessage = useCallback(async () => {
-    if (!userMessage.trim()) return;
-
-    const userMsg: Message = { text: userMessage, sender: "user" };
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
-    setUserMessage("");
-
-    const formattedHistory = updatedMessages.map((msg) => ({
-      role: msg.sender,
-      content: msg.text,
-    }));
+  const handleSend = async () => {
+    if (!question.trim()) return;
+    setQuestion("");
+    const updatedHistory: Message[] = [
+      ...history,
+      { role: "user", content: question },
+    ];
+    setHistory(updatedHistory);
+    setLoading(true);
 
     try {
-      const response = await sendMessage(userMessage, true, formattedHistory);
-      const botMsg: Message = { text: response, sender: "bot" };
-      setMessages((prevMessages) => [...prevMessages, botMsg]);
+      const response = await sendQuestion(question, updatedHistory);
+      setHistory([...updatedHistory, { role: "assistant", content: response }]);
     } catch (error) {
-      console.error("Error sending message:", error);
-      const errorMsg: Message = { text: "Error: Unable to get response.", sender: "bot" };
-      setMessages((prevMessages) => [...prevMessages, errorMsg]);
+      console.error("Error sending question:", error);
+      setHistory([
+        ...updatedHistory,
+        {
+          role: "assistant",
+          content: "❌ Something went wrong. Please try again.",
+        },
+      ]);
     }
-  }, [userMessage, messages]);
+
+    setLoading(false);
+  };
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-800 font-sans">
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-[280px_1fr] bg-gradient-to-b from-slate-50 to-white">
       {/* Sidebar */}
-      <aside className="w-72 bg-white border-r p-6 shadow hidden md:flex flex-col justify-between">
-        <div>
-          <div className="mb-6 flex items-center gap-2 text-xl font-bold text-blue-600">
-            <span className="text-3xl">📡</span>
-            <span>IPChat Console</span>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-semibold mb-1">Search Service</label>
-            <select className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-gray-50">
-              <option>BOOKS_DATASET_SERVICE</option>
-            </select>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-semibold mb-2">Session Settings</h3>
-            <div className="bg-gray-100 p-3 rounded text-sm space-y-1 shadow-sm">
-              <div>🚀 Streamapp team</div>
-              <div>🐞 Debug mode</div>
-              <div>🔍 Tracing enabled</div>
-            </div>
-          </div>
+      <aside className="bg-indigo-700 text-white px-6 py-10 flex flex-col gap-6 items-center shadow-lg">
+        <div className="text-5xl">🤖</div>
+        <h1 className="text-3xl font-bold tracking-wide">Genz</h1>
+        <p className="text-indigo-200 text-sm text-center">
+          Your intelligent book <br /> chat assistant
+        </p>
+        <div className="mt-10 space-y-2 text-sm text-indigo-300 text-center">
+          <p>📚 Book search</p>
+          <p>🎯 Precise answers</p>
+          <p>💬 Chat context-aware</p>
         </div>
-
-        <footer className="text-xs text-gray-400 text-center mt-8">
-          © 2025 IPChat
-        </footer>
       </aside>
 
-      {/* Main Chat */}
-      <main className="flex-1 flex flex-col p-4 md:p-6">
-        <header className="mb-4 text-2xl font-semibold text-blue-700">
-          👋 Welcome to IPChat
-        </header>
+      {/* Main Chat Area */}
+      <main className="flex flex-col items-center py-10 px-6">
+        <div className="w-full max-w-5xl h-[90vh] bg-white rounded-xl shadow-lg p-6 flex flex-col">
+          <h2 className="text-2xl font-bold text-indigo-700 text-center mb-6">
+            🤖 Welcome to Genz
+          </h2>
 
-        <div className="flex-1 overflow-y-auto bg-gradient-to-br from-white via-gray-100 to-gray-200 rounded-xl border p-4 shadow-inner">
-          {messages.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6 animate-fadeIn">
-              Start chatting to see responses...
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((msg, index) => (
+          {/* Chat History */}
+          <div className="flex-1 overflow-y-auto space-y-5 border border-indigo-100 p-5 rounded-md bg-indigo-50 mb-6 scrollbar-thin scrollbar-thumb-indigo-300 scrollbar-track-indigo-100">
+            {history.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex ${
+                  msg.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
                 <div
-                  key={index}
-                  className={`flex items-start space-x-2 transition duration-300 ease-in-out ${
-                    msg.sender === "user" ? "justify-end" : "justify-start"
+                  className={`max-w-[75%] px-4 py-3 rounded-xl whitespace-pre-wrap text-sm leading-relaxed shadow ${
+                    msg.role === "user"
+                      ? "bg-indigo-600 text-white rounded-br-none"
+                      : "bg-white text-gray-900 border border-indigo-200 rounded-bl-none"
                   }`}
                 >
-                  {msg.sender === "bot" && (
-                    <span className="inline-block h-8 w-8 bg-gray-300 rounded-full text-center leading-8">
-                      🤖
-                    </span>
-                  )}
-                  <div
-                    className={`p-3 rounded-lg max-w-sm shadow ${
-                      msg.sender === "bot"
-                        ? "bg-gray-100 text-gray-800"
-                        : "bg-blue-600 text-white"
-                    }`}
-                  >
-                    {msg.text}
+                  <div className="font-semibold text-xs mb-1 opacity-80">
+                    {msg.role === "user" ? "👤 You" : "🤖 BookBot"}
                   </div>
-                  {msg.sender === "user" && (
-                    <span className="inline-block h-8 w-8 bg-blue-600 text-white rounded-full text-center leading-8">
-                      🧑
-                    </span>
-                  )}
+                  {msg.content}
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
 
-        {/* Input field with emoji inside */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendMessage();
-          }}
-          className="mt-4 flex items-center bg-white border rounded-lg shadow px-3 py-2 focus-within:ring-2 focus-within:ring-blue-600"
-        >
-          <input
-            type="text"
-            value={userMessage}
-            onChange={(e) => setUserMessage(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 text-sm p-2 focus:outline-none"
-          />
-          <button
-            type="submit"
-            title="Send"
-            className="text-xl cursor-pointer hover:scale-110 transition"
-          >
-            🚀
-          </button>
-        </form>
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded-xl text-sm shadow italic animate-pulse">
+                  🤖 Genz is thinking...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input Area */}
+          <div className="flex items-center border border-indigo-300 rounded-xl overflow-hidden">
+            <input
+              type="text"
+              className="flex-1 px-4 py-3 focus:outline-none text-sm"
+              placeholder="Type your question about books..."
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              disabled={loading}
+            />
+            <button
+              onClick={handleSend}
+              disabled={loading}
+              className="px-5 py-3 text-xl hover:scale-105 transition-transform disabled:opacity-30"
+              aria-label="Send message"
+            >
+              🚀
+            </button>
+          </div>
+        </div>
       </main>
     </div>
   );
