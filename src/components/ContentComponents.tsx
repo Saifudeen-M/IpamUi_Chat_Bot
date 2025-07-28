@@ -23,7 +23,11 @@ function ContentComponents() {
 
     try {
       const response = await sendQuestion(question, updatedHistory);
-      setHistory([...updatedHistory, { role: "assistant", content: response }]);
+      const formattedResponse = formatResponse(response);
+      setHistory([
+        ...updatedHistory,
+        { role: "assistant", content: formattedResponse },
+      ]);
     } catch (error) {
       console.error("Error sending question:", error);
       setHistory([
@@ -36,6 +40,18 @@ function ContentComponents() {
     }
 
     setLoading(false);
+  };
+
+  const formatResponse = (response: string) => {
+    return response
+      .replace(
+        /https:\/\/github\.com\/Saifudeen-M\/IpamUi_Chat_Bot/g,
+        `<a href="https://github.com/Saifudeen-M/IpamUi_Chat_Bot" target="_blank" rel="noopener noreferrer">⚛️</a>`
+      )
+      .replace(
+        /https:\/\/github\.com\/Saifudeen-M\/Ipam_Chat_Bot/g,
+        `<a href="https://github.com/Saifudeen-M/Ipam_Chat_Bot" target="_blank" rel="noopener noreferrer">🐍</a>`
+      );
   };
 
   return (
@@ -80,7 +96,9 @@ function ContentComponents() {
                   <div className="font-semibold text-xs mb-1 opacity-80">
                     {msg.role === "user" ? "👤 You" : "🤖 BookBot"}
                   </div>
-                  {msg.content}
+                  <div
+                    dangerouslySetInnerHTML={{ __html: msg.content }}
+                  />
                 </div>
               </div>
             ))}
