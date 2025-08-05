@@ -5,16 +5,11 @@ export type Message = {
   content: string;
 };
 
-const API_URL = "https://ipam-chatbot.vercel.app/chat";
+const API_URL = "http://127.0.0.1:8001/chat";
 
 export const sendQuestion = async (
-  question: string,
-  history: Message[]
-): Promise<string> => {
-  const response = await axios.post(API_URL, {
-    question,
-    use_chat_history: true,
-    history,
-  });
+  question: string
+): Promise<string | Record<string, any>[]> => {
+  const response = await axios.post(API_URL, { question });
   return response.data.response;
 };

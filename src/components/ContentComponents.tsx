@@ -13,21 +13,34 @@ function ContentComponents() {
 
   const handleSend = async () => {
     if (!question.trim()) return;
+    const currentQuestion = question;
     setQuestion("");
-    const updatedHistory: Message[] = [
-      ...history,
-      { role: "user", content: question },
-    ];
-    setHistory(updatedHistory);
     setLoading(true);
 
+    const updatedHistory: Message[] = [
+      ...history,
+      { role: "user", content: currentQuestion },
+    ];
+    setHistory(updatedHistory);
+
     try {
-      const response = await sendQuestion(question, updatedHistory);
-      const formattedResponse = formatResponse(response);
-      setHistory([
-        ...updatedHistory,
-        { role: "assistant", content: formattedResponse },
-      ]);
+      const response = await sendQuestion(currentQuestion);
+
+      const formatted =
+        typeof response === "string"
+          ? response
+          : Array.isArray(response) && response.length > 0
+            ? response
+              .map((row, idx) => {
+                return `${idx + 1}.\n` +
+                  Object.entries(row)
+                    .map(([key, value]) => `  ${key}: ${value}`)
+                    .join("\n");
+              })
+              .join("\n\n")
+            : "No results found.";
+
+      setHistory([...updatedHistory, { role: "assistant", content: formatted }]);
     } catch (error) {
       console.error("Error sending question:", error);
       setHistory([
@@ -40,18 +53,6 @@ function ContentComponents() {
     }
 
     setLoading(false);
-  };
-
-  const formatResponse = (response: string) => {
-    return response
-      .replace(
-        /https:\/\/github\.com\/Saifudeen-M\/IpamUi_Chat_Bot/g,
-        `<a href="https://github.com/Saifudeen-M/IpamUi_Chat_Bot" target="_blank" rel="noopener noreferrer">⚛️</a>`
-      )
-      .replace(
-        /https:\/\/github\.com\/Saifudeen-M\/Ipam_Chat_Bot/g,
-        `<a href="https://github.com/Saifudeen-M/Ipam_Chat_Bot" target="_blank" rel="noopener noreferrer">🐍</a>`
-      );
   };
 
   return (
@@ -82,23 +83,19 @@ function ContentComponents() {
             {history.map((msg, idx) => (
               <div
                 key={idx}
-                className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"
+                  }`}
               >
                 <div
-                  className={`max-w-[75%] px-4 py-3 rounded-xl whitespace-pre-wrap text-sm leading-relaxed shadow ${
-                    msg.role === "user"
-                      ? "bg-indigo-600 text-white rounded-br-none"
-                      : "bg-white text-gray-900 border border-indigo-200 rounded-bl-none"
-                  }`}
+                  className={`max-w-[75%] px-4 py-3 rounded-xl whitespace-pre-wrap text-sm leading-relaxed shadow ${msg.role === "user"
+                    ? "bg-indigo-600 text-white rounded-br-none"
+                    : "bg-white text-gray-900 border border-indigo-200 rounded-bl-none"
+                    }`}
                 >
                   <div className="font-semibold text-xs mb-1 opacity-80">
                     {msg.role === "user" ? "👤 You" : "🤖 BookBot"}
                   </div>
-                  <div
-                    dangerouslySetInnerHTML={{ __html: msg.content }}
-                  />
+                  {msg.content}
                 </div>
               </div>
             ))}
