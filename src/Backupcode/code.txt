@@ -1,0 +1,838 @@
+// import { useState } from "react";
+// import { sendQuestion } from "../services/api";
+
+// type Message = {
+//   role: "user" | "assistant";
+//   content: string;
+// };
+
+// function ContentComponents() {
+//   const [question, setQuestion] = useState("");
+//   const [history, setHistory] = useState<Message[]>([]);
+//   const [loading, setLoading] = useState(false);
+
+//   const handleSend = async () => {
+//     if (!question.trim()) return;
+//     const currentQuestion = question;
+//     setQuestion("");
+//     setLoading(true);
+
+//     const updatedHistory: Message[] = [
+//       ...history,
+//       { role: "user", content: currentQuestion },
+//     ];
+//     setHistory(updatedHistory);
+
+//     try {
+//       const response = await sendQuestion(currentQuestion);
+
+//       const formatted =
+//         typeof response === "string"
+//           ? response
+//           : Array.isArray(response) && response.length > 0
+//             ? response
+//               .map((row, idx) => {
+//                 return `${idx + 1}.\n` +
+//                   Object.entries(row)
+//                     .map(([key, value]) => `  ${key}: ${value}`)
+//                     .join("\n");
+//               })
+//               .join("\n\n")
+//             : "No results found.";
+
+//       setHistory([...updatedHistory, { role: "assistant", content: formatted }]);
+//     } catch (error) {
+//       console.error("Error sending question:", error);
+//       setHistory([
+//         ...updatedHistory,
+//         {
+//           role: "assistant",
+//           content: "❌ Something went wrong. Please try again.",
+//         },
+//       ]);
+//     }
+
+//     setLoading(false);
+//   };
+
+//   return (
+//     <div className="min-h-screen grid grid-cols-1 md:grid-cols-[280px_1fr] bg-gradient-to-b from-slate-50 to-white">
+//       {/* Sidebar */}
+//       <aside className="bg-indigo-700 text-white px-6 py-10 flex flex-col gap-6 items-center shadow-lg">
+//         <div className="text-5xl">🤖</div>
+//         <h1 className="text-3xl font-bold tracking-wide">Genz</h1>
+//         <p className="text-indigo-200 text-sm text-center">
+//           Your intelligent book <br /> chat assistant
+//         </p>
+//         <div className="mt-10 space-y-2 text-sm text-indigo-300 text-center">
+//           <p>📚 Book search</p>
+//           <p>🎯 Precise answers</p>
+//           <p>💬 Chat context-aware</p>
+//         </div>
+//       </aside>
+
+//       {/* Main Chat Area */}
+//       <main className="flex flex-col items-center py-10 px-6">
+//         <div className="w-full max-w-5xl h-[90vh] bg-white rounded-xl shadow-lg p-6 flex flex-col">
+//           <h2 className="text-2xl font-bold text-indigo-700 text-center mb-6">
+//             🤖 Welcome to Genz
+//           </h2>
+
+//           {/* Chat History */}
+//           <div className="flex-1 overflow-y-auto space-y-5 border border-indigo-100 p-5 rounded-md bg-indigo-50 mb-6 scrollbar-thin scrollbar-thumb-indigo-300 scrollbar-track-indigo-100">
+//             {history.map((msg, idx) => (
+//               <div
+//                 key={idx}
+//                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"
+//                   }`}
+//               >
+//                 <div
+//                   className={`max-w-[75%] px-4 py-3 rounded-xl whitespace-pre-wrap text-sm leading-relaxed shadow ${msg.role === "user"
+//                     ? "bg-indigo-600 text-white rounded-br-none"
+//                     : "bg-white text-gray-900 border border-indigo-200 rounded-bl-none"
+//                     }`}
+//                 >
+//                   <div className="font-semibold text-xs mb-1 opacity-80">
+//                     {msg.role === "user" ? "👤 You" : "🤖 BookBot"}
+//                   </div>
+//                   {msg.content}
+//                 </div>
+//               </div>
+//             ))}
+
+//             {loading && (
+//               <div className="flex justify-start">
+//                 <div className="bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded-xl text-sm shadow italic animate-pulse">
+//                   🤖 Genz is thinking...
+//                 </div>
+//               </div>
+//             )}
+//           </div>
+
+//           {/* Input Area */}
+//           <div className="flex items-center border border-indigo-300 rounded-xl overflow-hidden">
+//             <input
+//               type="text"
+//               className="flex-1 px-4 py-3 focus:outline-none text-sm"
+//               placeholder="Type your question about books..."
+//               value={question}
+//               onChange={(e) => setQuestion(e.target.value)}
+//               onKeyDown={(e) => e.key === "Enter" && handleSend()}
+//               disabled={loading}
+//             />
+//             <button
+//               onClick={handleSend}
+//               disabled={loading}
+//               className="px-5 py-3 text-xl hover:scale-105 transition-transform disabled:opacity-30"
+//               aria-label="Send message"
+//             >
+//               🚀
+//             </button>
+//           </div>
+//         </div>
+//       </main>
+//     </div>
+//   );
+// }
+
+// export default ContentComponents;
+
+import { useState } from "react";
+import { sendQuestion } from "../services/api";
+import { Copy } from "lucide-react";
+
+// Type definitions
+type Message = {
+  role: "user" | "assistant";
+  content: string | any[] | FormattedMessage;
+};
+
+type FormattedMessage = {
+  type: "text" | "table";
+  data: string | any[];
+};
+
+function ContentComponents() {
+  const [question, setQuestion] = useState("");
+  const [history, setHistory] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  const isExcelRequest = (q: string) =>
+    /\b(download|excel|export|\.xlsx)\b/i.test(q);
+
+  const getSuggestedFilename = (q: string) => {
+    const match = q.match(
+      /(?:download|export).*(ipv[46]|username|useragent|port|timezone|protocol)/i
+    );
+    const keyword = match?.[1]?.toLowerCase() || "ip-data";
+    return `${keyword}-data.csv`;
+  };
+
+  const handleSend = async () => {
+    if (!question.trim()) return;
+    const currentQuestion = question;
+    setQuestion("");
+    setLoading(true);
+
+    const updatedHistory: Message[] = [
+      ...history,
+      { role: "user", content: currentQuestion },
+    ];
+    setHistory(updatedHistory);
+
+    try {
+      const excelMode = isExcelRequest(currentQuestion);
+      const response = await sendQuestion(currentQuestion, {
+        responseType: excelMode ? "blob" : "json",
+      });
+
+      if (excelMode && response instanceof Blob) {
+        // Get filename from content-disposition if present
+        const contentDisposition = (response as any).headers?.get?.("content-disposition");
+        const fallbackName = getSuggestedFilename(currentQuestion);
+        const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
+        const fileName = filenameMatch?.[1] || fallbackName;
+
+        const url = window.URL.createObjectURL(new Blob([response]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setHistory([
+          ...updatedHistory,
+          {
+            role: "assistant",
+            content: `📁 Your file (${fileName}) has been downloaded successfully!`,
+          },
+        ]);
+      } else {
+        const formatted: FormattedMessage =
+          Array.isArray(response) && response.length > 0
+            ? { type: "table", data: response }
+            : {
+              type: "text",
+              data:
+                typeof response === "string"
+                  ? response
+                  : "No results found.",
+            };
+
+        setHistory([
+          ...updatedHistory,
+          { role: "assistant", content: formatted },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error sending question:", error);
+      setHistory([
+        ...updatedHistory,
+        {
+          role: "assistant",
+          content: "❌ Something went wrong. Please try again.",
+        },
+      ]);
+    }
+
+    setLoading(false);
+  };
+
+
+
+  const handleVoice = () => {
+    const recognition = new (window as any).webkitSpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    setIsListening(true);
+    recognition.start();
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setTimeout(() => {
+        if (transcript.trim()) {
+          handleSendFromTranscript(transcript);
+        }
+      }, 500);
+    };
+
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+  };
+
+  const handleSendFromTranscript = async (spokenText: string) => {
+    if (!spokenText.trim()) return;
+
+    setLoading(true);
+    const updatedHistory: Message[] = [
+      ...history,
+      { role: "user", content: spokenText },
+    ];
+    setHistory(updatedHistory);
+
+    try {
+      const excelMode = isExcelRequest(spokenText);
+      const response = await sendQuestion(spokenText, {
+        responseType: excelMode ? "blob" : "json",
+      });
+
+      if (excelMode && response instanceof Blob) {
+        const url = window.URL.createObjectURL(new Blob([response]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", getSuggestedFilename(spokenText));
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setHistory([
+          ...updatedHistory,
+          {
+            role: "assistant",
+            content: "📁 Your Excel file has been downloaded successfully!",
+          },
+        ]);
+      } else {
+        const formatted: FormattedMessage =
+          Array.isArray(response) && response.length > 0
+            ? { type: "table", data: response }
+            : { type: "text", data: typeof response === "string" ? response : "No results found." };
+
+        setHistory([
+          ...updatedHistory,
+          { role: "assistant", content: formatted },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error sending question:", error);
+      setHistory([
+        ...updatedHistory,
+        {
+          role: "assistant",
+          content: "❌ Something went wrong. Please try again.",
+        },
+      ]);
+    }
+
+    setLoading(false);
+  };
+
+  const handleCopy = (text: string) => {
+    if (typeof text === "string") {
+      navigator.clipboard.writeText(text);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex flex-col md:flex-row">
+      {/* Sidebar */}
+      <aside className="w-full md:w-[280px] bg-indigo-700 text-white px-6 py-10 flex flex-col gap-6 items-center shadow-lg">
+        <div className="text-5xl">🤖</div>
+        <h1 className="text-3xl font-bold tracking-wide">Genz</h1>
+        <p className="text-indigo-200 text-sm text-center">
+          Your intelligent IP log <br /> assistant
+        </p>
+      </aside>
+
+      {/* Chat Panel */}
+      <section className="flex-1 w-full max-w-7xl mx-auto h-screen overflow-hidden flex flex-col px-4 py-6">
+        <h2 className="text-2xl font-bold text-indigo-700 text-center mb-4">
+          🤖 Welcome to Genz
+        </h2>
+
+        {/* Chat History */}
+        <div className="flex-1 overflow-y-auto border border-indigo-100 p-4 rounded-md bg-indigo-50 mb-4 scrollbar-thin scrollbar-thumb-indigo-300 scrollbar-track-indigo-100">
+          {history.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} mb-3`}
+            >
+              <div
+                className={`relative max-w-[90%] px-4 py-3 rounded-xl whitespace-pre-wrap text-sm leading-relaxed shadow ${msg.role === "user"
+                  ? "bg-indigo-600 text-white rounded-br-none"
+                  : "bg-white text-gray-900 border border-indigo-200 rounded-bl-none"
+                  }`}
+              >
+                <div className="font-semibold text-xs mb-1 opacity-80">
+                  {msg.role === "user" ? "👤 You" : "🤖 Genz"}
+                </div>
+
+                {/* Message Content */}
+                <div className="overflow-x-auto">
+                  {(() => {
+                    const content = msg.content;
+
+                    if (typeof content === "string") return <>{content}</>;
+
+                    if (Array.isArray(content) && content.length > 0) {
+                      return (
+                        <table className="table-auto text-left text-xs w-full min-w-[500px] border border-indigo-200 rounded-md">
+                          <thead className="bg-indigo-100 sticky top-0">
+                            <tr>
+                              {Object.keys(content[0]).map((key) => (
+                                <th key={key} className="px-2 py-1 border">
+                                  {key}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {content.map((row, i) => (
+                              <tr key={i} className="odd:bg-white even:bg-indigo-50">
+                                {Object.values(row).map((val, j) => (
+                                  <td key={j} className="px-2 py-1 border break-words max-w-[150px]">
+                                    {String(val)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      );
+                    }
+
+                    if (typeof content === "object" && content !== null) {
+                      const formatted = content as FormattedMessage;
+
+                      if (formatted.type === "text") return <>{formatted.data}</>;
+
+                      if (formatted.type === "table" && Array.isArray(formatted.data)) {
+                        return (
+                          <table className="table-auto text-left text-xs w-full min-w-[300px] border border-indigo-200">
+                            <thead className="bg-indigo-100 sticky top-0">
+                              <tr>
+                                {Object.keys(formatted.data[0]).map((key) => (
+                                  <th key={key} className="px-2 py-1 border">
+                                    {key}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {formatted.data.map((row: any, i: number) => (
+                                <tr key={i} className="odd:bg-white even:bg-indigo-50">
+                                  {Object.values(row).map((val, j) => (
+                                    <td key={j} className="px-2 py-1 border break-words max-w-[150px]">
+                                      {String(val)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        );
+                      }
+                    }
+
+                    return <em>Unsupported content</em>;
+                  })()}
+                </div>
+
+                {msg.role === "assistant" && typeof msg.content === "string" && (
+                  <button
+                    onClick={() => handleCopy(msg.content as string)}
+                    className="absolute top-2 right-2 text-xs text-indigo-500 hover:underline"
+                  >
+                    <Copy size={14} className="inline-block mr-1 cursor-pointer" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded-xl text-sm shadow italic animate-pulse">
+                🤖 Genz is thinking...
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input Area */}
+        <div className="flex items-center gap-2 border border-indigo-300 rounded-xl overflow-hidden px-3 py-2">
+          <input
+            type="text"
+            className="flex-1 px-2 py-2 focus:outline-none text-sm"
+            placeholder="Ask about IP logs or say 'give me 10 ipv4 in excel'..."
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            disabled={loading}
+          />
+          <button
+            onClick={handleSend}
+            disabled={loading}
+            className="cursor-pointer px-3 py-2 text-xl hover:scale-105 transition-transform disabled:opacity-30"
+            aria-label="Send message"
+            title="Send message"
+          >
+            🚀
+          </button>
+          <button
+            onClick={handleVoice}
+            disabled={loading}
+            className="cursor-pointer text-xl hover:scale-110 transition-transform"
+            title={isListening ? "Listening..." : "Speak"}
+          >
+            {isListening ? "🔴" : "🎤"}
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export default ContentComponents;
+
+
+import { useState } from "react";
+import { sendQuestion } from "../services/api";
+import { Copy, Upload, Mic, MicOff } from "lucide-react";
+import clsx from "clsx";
+
+type Message = {
+  role: "user" | "assistant";
+  content: string | any[] | FormattedMessage;
+};
+
+type FormattedMessage = {
+  type: "text" | "table";
+  data: string | any[];
+};
+
+function ContentComponents() {
+  const [question, setQuestion] = useState("");
+  const [history, setHistory] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [voiceLang, setVoiceLang] = useState("en-IN");
+  const [copied, setCopied] = useState<number | null>(null);
+
+
+
+  const isExcelRequest = (q: string) =>
+    /\b(download|excel|export|\.xlsx)\b/i.test(q);
+
+  const getSuggestedFilename = (q: string) => {
+    const match = q.match(/(?:download|export).*(ipv[46]|username|port|useragent)/i);
+    return `${match?.[1]?.toLowerCase() || "ip-data"}-data.csv`;
+  };
+
+  const handleSend = async (msgText?: string) => {
+    const q = msgText ?? question.trim();
+    if (!q) return;
+
+    const updatedHistory = [...history, { role: "user", content: q } as Message];
+    setQuestion("");
+    setTranscript("");
+    setLoading(true);
+    setHistory(updatedHistory);
+
+    try {
+      const excelMode = isExcelRequest(q);
+      const cleanHistory: { role: "user" | "assistant"; content: string }[] = updatedHistory.map((msg) => {
+        if (typeof msg.content === "string") {
+          return { role: msg.role, content: msg.content };
+        }
+
+        if (
+          typeof msg.content === "object" &&
+          msg.content !== null &&
+          "type" in msg.content &&
+          msg.content.type === "text" &&
+          typeof msg.content.data === "string"
+        ) {
+          return { role: msg.role, content: msg.content.data };
+        }
+
+        return { role: msg.role, content: "[Table Data]" };
+      });
+
+      const response = await sendQuestion(q, { responseType: excelMode ? "blob" : "json" }, cleanHistory);
+      if (excelMode && response instanceof Blob) {
+        const url = URL.createObjectURL(new Blob([response]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", getSuggestedFilename(q));
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setHistory([
+          ...updatedHistory,
+          {
+            role: "assistant",
+            content: "📁 Your Excel file has been downloaded successfully!",
+          } as Message,
+        ]);
+      } else {
+        const formatted: FormattedMessage = Array.isArray(response) && response.length
+          ? { type: "table", data: response }
+          : { type: "text", data: typeof response === "string" ? response : "No results found." };
+
+        setHistory([...updatedHistory, { role: "assistant", content: formatted } as Message]);
+      }
+    } catch {
+      setHistory([...updatedHistory, {
+        role: "assistant",
+        content: "❌ Something went wrong. Please try again.",
+      } as Message]);
+    }
+
+    setLoading(false);
+  };
+
+
+  const handleVoice = () => {
+    const recognition = new (window as any).webkitSpeechRecognition();
+    recognition.lang = voiceLang;
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    setIsListening(true);
+    recognition.start();
+
+    recognition.onresult = (event: any) => {
+      const spoken = event.results[0][0].transcript;
+      setTranscript(spoken);
+    };
+
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+  };
+
+  const handleCancelVoice = () => {
+    setTranscript("");
+    setIsListening(false);
+  };
+
+  const handleCopy = (msg: Message, index: number) => {
+    let textToCopy = "";
+
+    if (typeof msg.content === "string") {
+      textToCopy = msg.content;
+    } else if (
+      typeof msg.content === "object" &&
+      !Array.isArray(msg.content) &&
+      msg.content.type === "text" &&
+      typeof msg.content.data === "string"
+    ) {
+      textToCopy = msg.content.data;
+    }
+
+    if (textToCopy) {
+      navigator.clipboard.writeText(textToCopy);
+      setCopied(index);
+      setTimeout(() => setCopied(null), 500);
+    }
+  };
+
+
+
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex flex-col md:flex-row">
+      {/* Sidebar */}
+      <aside className="w-full md:w-[280px] bg-indigo-700 text-white px-6 py-10 flex flex-col gap-6 items-center shadow-lg">
+        <div className="text-5xl">🤖</div>
+        <h1 className="text-3xl font-bold">Genz</h1>
+        <p className="text-indigo-200 text-sm text-center">Your smart IP log assistant</p>
+        <select
+          value={voiceLang}
+          onChange={(e) => setVoiceLang(e.target.value)}
+          className="mt-4 bg-white text-black p-2 rounded text-sm"
+        >
+          <option value="en-IN">English (India)</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="ta-IN">Tamil</option>
+          <option value="te-IN">Telugu</option>
+          <option value="bn-IN">Bengali</option>
+        </select>
+      </aside>
+
+      {/* Main section */}
+      <section className="flex-1 px-4 py-6 max-w-7xl mx-auto flex flex-col h-screen">
+        <h2 className="text-2xl font-bold text-indigo-700 text-center mb-4">🤖 Welcome to Genz</h2>
+        <div className="flex-1 overflow-y-auto border border-indigo-100 p-4 rounded-md bg-indigo-50 mb-4">
+          {history.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} mb-3`}>
+              <div className={clsx(
+                "relative max-w-[90%] px-4 py-3 rounded-xl text-sm shadow whitespace-pre-wrap",
+                msg.role === "user"
+                  ? "bg-indigo-600 text-white rounded-br-none"
+                  : "bg-white text-gray-900 border border-indigo-200 rounded-bl-none"
+              )}>
+                <div className="font-semibold text-xs mb-1 opacity-80">
+                  {msg.role === "user" ? "👤 You" : "🤖 Genz"}
+                </div>
+
+                <div className="overflow-x-auto">
+                  {(() => {
+                    const c = msg.content;
+                    if (typeof c === "string") return c;
+                    if (Array.isArray(c)) return "🔗 Table data not formatted";
+                    if (typeof c === "object" && c.type === "text") return c.data;
+                    if (c.type === "table" && Array.isArray(c.data)) {
+                      return (
+                        <table className="table-auto w-full text-xs border border-indigo-200">
+                          <thead className="bg-indigo-100">
+                            <tr>{Object.keys(c.data[0]).map(k => (
+                              <th key={k} className="border px-2 py-1">{k}</th>
+                            ))}</tr>
+                          </thead>
+                          <tbody>
+                            {c.data.map((row, i) => (
+                              <tr key={i} className="odd:bg-white even:bg-indigo-50">
+                                {Object.values(row).map((val, j) => (
+                                  <td key={j} className="border px-2 py-1 break-all max-w-[150px]">{String(val)}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      );
+                    }
+                    return <em>Unsupported content</em>;
+                  })()}
+                </div>
+
+                {/* Copy icon for both roles */}
+                <div className="absolute top-2 right-2">
+                  <div className="relative">
+                    <Copy
+                      size={14}
+                      className="text-gray-500 cursor-pointer hover:text-black transition-colors"
+                      onClick={() => handleCopy(msg, i)}
+                    />
+                    {copied === i && (
+                      <span className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-green-100 text-green-700 text-xs px-2 py-1 rounded shadow">
+                        Copied!
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="text-indigo-700 italic animate-pulse">🤖 Genz is thinking...</div>
+          )}
+        </div>
+
+        {/* Input bar */}
+        <div className="flex items-center gap-2 border border-indigo-300 rounded-xl px-3 py-2">
+          <input
+            type="text"
+            className="flex-1 px-2 py-2 focus:outline-none text-sm"
+            placeholder="Ask a question about IP logs..."
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            disabled={loading}
+          />
+          <button
+            onClick={() => handleSend()}
+            className="cursor-pointer text-xl hover:scale-110 transition-transform"
+            disabled={loading}
+          >
+            <Upload size={20} />
+          </button>
+
+          <button
+            onClick={handleVoice}
+            disabled={loading}
+            title="Voice input"
+            className="cursor-pointer text-xl hover:scale-110 transition-transform"
+          >
+            {isListening ? <Mic size={20} className="text-red-600 animate-pulse" /> : <MicOff size={20} />}
+          </button>
+        </div>
+
+        {/* Voice transcript section */}
+        {transcript && (
+          <div className="mt-3 flex items-center gap-2 text-sm bg-indigo-100 p-2 rounded">
+            <span className="font-medium text-indigo-800">🎧 Recognized:</span>
+            <span className="flex-1 italic text-gray-800">{transcript}</span>
+            <button onClick={() => handleSend(transcript)} className="cursor-pointer text-green-600 font-bold">✅ Send</button>
+            <button onClick={handleCancelVoice} className="cursor-pointer text-red-600 font-bold">❌ Cancel</button>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+export default ContentComponents;
+
+ // const handleSend = async (msgText?: string) => {
+  //   const q = msgText ?? question.trim();
+  //   if (!q) return;
+
+  //   const updatedHistory = [...history, { role: "user", content: q } as Message];
+  //   setQuestion("");
+  //   setTranscript("");
+  //   setLoading(true);
+  //   setHistory(updatedHistory);
+
+  //   try {
+  //     const excelMode = isExcelRequest(q);
+  //     const cleanHistory: { role: "user" | "assistant"; content: string }[] = updatedHistory.map((msg) => {
+  //       if (typeof msg.content === "string") {
+  //         return { role: msg.role, content: msg.content };
+  //       }
+
+  //       if (
+  //         typeof msg.content === "object" &&
+  //         msg.content !== null &&
+  //         "type" in msg.content &&
+  //         msg.content.type === "text" &&
+  //         typeof msg.content.data === "string"
+  //       ) {
+  //         return { role: msg.role, content: msg.content.data };
+  //       }
+
+  //       return { role: msg.role, content: "[Table Data]" };
+  //     });
+
+  //     const response = await sendQuestion(q, { responseType: excelMode ? "blob" : "json" }, cleanHistory);
+  //     if (excelMode && response instanceof Blob) {
+  //       const url = URL.createObjectURL(new Blob([response]));
+  //       const link = document.createElement("a");
+  //       link.href = url;
+  //       link.setAttribute("download", getSuggestedFilename(q));
+  //       document.body.appendChild(link);
+  //       link.click();
+  //       link.remove();
+
+  //       setHistory([
+  //         ...updatedHistory,
+  //         {
+  //           role: "assistant",
+  //           content: "📁 Your Excel file has been downloaded successfully!",
+  //         } as Message,
+  //       ]);
+  //     } else {
+  //       const formatted: FormattedMessage = Array.isArray(response) && response.length
+  //         ? { type: "table", data: response }
+  //         : { type: "text", data: typeof response === "string" ? response : "No results found." };
+
+  //       setHistory([...updatedHistory, { role: "assistant", content: formatted } as Message]);
+  //     }
+  //   } catch {
+  //     setHistory([...updatedHistory, {
+  //       role: "assistant",
+  //       content: "❌ Something went wrong. Please try again.",
+  //     } as Message]);
+  //   }
+
+  //   setLoading(false);
+  // };
